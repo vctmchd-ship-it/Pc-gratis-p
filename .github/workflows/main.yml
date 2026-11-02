@@ -1,0 +1,54 @@
+# Configurações
+$VM_NAME = "pgr"
+$VM_USER = "pgr"
+$VM_PASSWORD = "pgr"
+# ALTERE O CAMINHO DA ISO ABAIXO PARA O LOCAL ONDE ELA ESTÁ NO SEU PC
+$ISO_PATH = "$env:USERPROFILE\Downloads\ubuntu.iso"
+$VM_BASE_DIR = "$env:USERPROFILE\VirtualBox VMs"
+$VM_DIR = Join-Path $VM_BASE_DIR $VM_NAME
+$DISK_PATH = Join-Path $VM_DIR "$VM_NAME.vdi"
+
+# Verifica se o VBoxManage está no caminho
+if (!(Get-Command "VBoxManage" -ErrorAction SilentlyContinue)) {
+    Write-Error "VBoxManage não encontrado. Certifique-se de que o VirtualBox está instalado e no PATH do Windows."
+    exit
+}
+
+# Verifica se a ISO existe
+if (!(Test-Path $ISO_PATH)) {
+    Write-Error "Erro: ISO não encontrada em: $ISO_PATH"
+    exit
+}
+
+# Remove VM anterior, se existir
+if (VBoxManage list vms | Select-String -Quiet "$VM_NAME") {
+    Write-Host "Removendo VM existente..."
+    VBoxManage controlvm $VM_NAME poweroff 2>$null
+    VBoxManage unregistervm $VM_NAME --delete
+}
+
+# Cria diretório da VM
+if (!(Test-Path $VM_DIR)) {
+    New-Item -Path $VM_DIR -ItemType Directory
+}
+
+# Cria a máquina virtual
+VBoxManage createvm --name $VM_NAME --ostype "Ubuntu_64" --register --basefolder $VM_BASE_DIR
+
+# Configura hardware
+VBoxManage modifyvm $VM_NAME --memory 4096 --cpus 2 --vram 128 --nic1 nat --audio-driver none --boot1 dvd --boot2 disk
+
+# Cria o disco virtual de 30 GB
+VBoxManage createmedium disk --filename $DISK_PATH --size 30720 --format VDI --variant Standard
+
+# Configura controladoras
+VBoxManage storagectl $VM_NAME --name "SATA Controller" --add sata --controller IntelAhci
+VBoxManage storageattach $VM_NAME --storagectl "SATA Controller" --port 0 --device 0 --type hdd --medium $DISK_PATH
+
+VBoxManage storagectl $VM_NAME --name "IDE Controller" --add ide
+VBoxManage storageattach $VM_NAME --storagectl "IDE Controller" --port 1 --device 0 --type dvddrive --medium $ISO_PATH
+
+# Inicia a VM
+VBoxManage startvm $VM_NAME
+
+Write-Host "VM '$VM_NAME' iniciada com sucesso."
